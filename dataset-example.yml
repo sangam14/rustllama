@@ -1,0 +1,133 @@
+version: '1.0'
+name: RustLama Configuration
+description: Example configuration for batch inference and model management
+defaults:
+  model: TheBloke/Llama-2-7B-Chat-GGUF
+  hf_filename: null
+  cache_dir: null
+  max_tokens: 1024
+  temperature: 0.8
+  top_k: 40
+  top_p: 0.95
+  ctx_size: 2048
+  threads: null
+  verbose: false
+  no_color: false
+  stats: false
+models:
+- action: pull
+  model_id: TheBloke/Llama-2-7B-Chat-GGUF
+  filename: llama-2-7b-chat.Q4_K_M.gguf
+  cache_dir: null
+  force: false
+  verbose: true
+  description: Download Llama 2 7B Chat model
+tasks:
+- name: Creative Writing
+  prompt: Write a short story about space exploration
+  model: null
+  hf_filename: null
+  cache_dir: null
+  force_download: false
+  max_tokens: 512
+  temperature: 1.0
+  top_k: 40
+  top_p: 0.9
+  ctx_size: null
+  threads: null
+  no_color: false
+  stats: true
+  verbose: false
+  output_file: creative_story.txt
+  description: Generate creative content
+  continue_on_error: false
+- name: Technical Explanation
+  prompt: Explain how neural networks work in simple terms
+  model: null
+  hf_filename: null
+  cache_dir: null
+  force_download: false
+  max_tokens: 1024
+  temperature: 0.3
+  top_k: 20
+  top_p: 0.95
+  ctx_size: null
+  threads: null
+  no_color: false
+  stats: true
+  verbose: true
+  output_file: neural_networks.txt
+  description: Generate technical documentation
+  continue_on_error: false
+datasets:
+- name: Instruction Following Dataset
+  prompt_template: |
+    ### Instruction:
+    {instruction}
+
+    ### Response:
+  completion_template: '{response}'
+  dataset_type: instruction
+  count: 100
+  variety_prompts:
+  - Write a detailed explanation of {topic}
+  - Create a step-by-step guide for {topic}
+  - Explain the benefits and challenges of {topic}
+  - Compare and contrast different aspects of {topic}
+  topics:
+  - machine learning
+  - renewable energy
+  - space exploration
+  - artificial intelligence
+  - quantum computing
+  labels: []
+  model: null
+  hf_filename: null
+  cache_dir: null
+  force_download: false
+  max_tokens: 8192
+  temperature: 0.9
+  top_k: 40
+  top_p: 0.95
+  ctx_size: 32768
+  threads: null
+  output_file: instruction_dataset.jsonl
+  include_metadata: true
+  quality_checks: true
+  shuffle: true
+  verbose: true
+  description: Generate high-quality instruction-following dataset
+  custom_fields: {}
+- name: Q&A Dataset
+  prompt_template: "Question: {question}\nAnswer: "
+  completion_template: null
+  dataset_type: qa
+  count: 50
+  variety_prompts:
+  - What is {topic} and how does it work?
+  - Explain the key concepts of {topic}
+  - What are the practical applications of {topic}?
+  topics:
+  - blockchain technology
+  - climate change
+  - data science
+  labels: []
+  model: null
+  hf_filename: null
+  cache_dir: null
+  force_download: false
+  max_tokens: 4096
+  temperature: 0.7
+  top_k: 50
+  top_p: 0.9
+  ctx_size: 16384
+  threads: null
+  output_file: qa_dataset.jsonl
+  include_metadata: true
+  quality_checks: true
+  shuffle: true
+  verbose: false
+  description: Generate Q&A pairs for training
+  custom_fields: {}
+environment:
+  RUSTLAMA_VERBOSE: 'true'

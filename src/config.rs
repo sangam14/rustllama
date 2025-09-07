@@ -81,6 +81,10 @@ pub struct YamlConfig {
     #[serde(default)]
     pub tasks: Vec<InferenceTask>,
     
+    /// Dataset generation tasks
+    #[serde(default)]
+    pub datasets: Vec<DatasetTask>,
+    
     /// Environment variables
     #[serde(default)]
     pub environment: HashMap<String, String>,
@@ -243,6 +247,115 @@ pub struct InferenceTask {
     pub continue_on_error: bool,
 }
 
+/// Dataset generation task configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetTask {
+    /// Dataset name
+    pub name: String,
+    
+    /// Base prompt template (can include placeholders like {topic}, {context})
+    pub prompt_template: String,
+    
+    /// Expected response/completion for training data
+    #[serde(default)]
+    pub completion_template: Option<String>,
+    
+    /// Dataset type: "instruction", "conversation", "completion", "qa", "classification"
+    #[serde(default = "default_dataset_type")]
+    pub dataset_type: String,
+    
+    /// Number of samples to generate
+    #[serde(default = "default_sample_count")]
+    pub count: usize,
+    
+    /// Variety prompts to generate diverse examples
+    #[serde(default)]
+    pub variety_prompts: Vec<String>,
+    
+    /// Topics/contexts for dataset diversity
+    #[serde(default)]
+    pub topics: Vec<String>,
+    
+    /// Labels for classification datasets
+    #[serde(default)]
+    pub labels: Vec<String>,
+    
+    /// Model to use for generation
+    #[serde(default)]
+    pub model: Option<String>,
+    
+    /// HuggingFace filename
+    #[serde(default)]
+    pub hf_filename: Option<String>,
+    
+    /// Cache directory
+    #[serde(default)]
+    pub cache_dir: Option<String>,
+    
+    /// Force download
+    #[serde(default)]
+    pub force_download: bool,
+    
+    /// Maximum tokens per sample (unlimited by default)
+    #[serde(default = "default_unlimited_tokens")]
+    pub max_tokens: usize,
+    
+    /// Sampling temperature for diverse outputs
+    #[serde(default = "default_dataset_temperature")]
+    pub temperature: f32,
+    
+    /// Top-k sampling
+    #[serde(default)]
+    pub top_k: Option<usize>,
+    
+    /// Top-p sampling
+    #[serde(default)]
+    pub top_p: Option<f32>,
+    
+    /// Context size (unlimited by default)
+    #[serde(default = "default_unlimited_context")]
+    pub ctx_size: u32,
+    
+    /// Number of threads
+    #[serde(default)]
+    pub threads: Option<i32>,
+    
+    /// Output JSONL file path
+    pub output_file: String,
+    
+    /// Include metadata in output
+    #[serde(default = "default_true")]
+    pub include_metadata: bool,
+    
+    /// Quality checks (basic validation)
+    #[serde(default = "default_true")]
+    pub quality_checks: bool,
+    
+    /// Shuffle the final dataset
+    #[serde(default = "default_true")]
+    pub shuffle: bool,
+    
+    /// Verbose output
+    #[serde(default)]
+    pub verbose: bool,
+    
+    /// Task description
+    #[serde(default)]
+    pub description: Option<String>,
+    
+    /// Custom JSONL fields mapping
+    #[serde(default)]
+    pub custom_fields: HashMap<String, String>,
+}
+
+// Default value functions for dataset configuration
+fn default_dataset_type() -> String { "instruction".to_string() }
+fn default_sample_count() -> usize { 100 }
+fn default_unlimited_tokens() -> usize { 8192 }  // Very high limit
+fn default_dataset_temperature() -> f32 { 0.9 }  // Higher temp for diversity
+fn default_unlimited_context() -> u32 { 32768 }  // Very high context
+fn default_true() -> bool { true }
+
 impl YamlConfig {
     /// Load configuration from YAML file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -369,6 +482,33 @@ impl YamlConfig {
         }
     }
     
+    /// Apply defaults to a dataset generation task
+    pub fn apply_dataset_defaults(&self, dataset: &mut DatasetTask) {
+        if let Some(defaults) = &self.defaults {
+            if dataset.model.is_none() {
+                dataset.model = defaults.model.clone();
+            }
+            if dataset.hf_filename.is_none() {
+                dataset.hf_filename = defaults.hf_filename.clone();
+            }
+            if dataset.cache_dir.is_none() {
+                dataset.cache_dir = defaults.cache_dir.clone();
+            }
+            if dataset.top_k.is_none() {
+                dataset.top_k = defaults.top_k;
+            }
+            if dataset.top_p.is_none() {
+                dataset.top_p = defaults.top_p;
+            }
+            if dataset.threads.is_none() {
+                dataset.threads = defaults.threads;
+            }
+            if defaults.verbose.unwrap_or(false) && !dataset.verbose {
+                dataset.verbose = true;
+            }
+        }
+    }
+    
     /// Generate a sample configuration file
     pub fn generate_sample() -> Self {
         let mut environment = HashMap::new();
@@ -443,6 +583,81 @@ impl YamlConfig {
                     output_file: Some("neural_networks.txt".to_string()),
                     description: Some("Generate technical documentation".to_string()),
                     continue_on_error: false,
+                },
+            ],
+            datasets: vec![
+                DatasetTask {
+                    name: "Instruction Following Dataset".to_string(),
+                    prompt_template: "### Instruction:\n{instruction}\n\n### Response:\n".to_string(),
+                    completion_template: Some("{response}".to_string()),
+                    dataset_type: "instruction".to_string(),
+                    count: 100,
+                    variety_prompts: vec![
+                        "Write a detailed explanation of {topic}".to_string(),
+                        "Create a step-by-step guide for {topic}".to_string(),
+                        "Explain the benefits and challenges of {topic}".to_string(),
+                        "Compare and contrast different aspects of {topic}".to_string(),
+                    ],
+                    topics: vec![
+                        "machine learning".to_string(),
+                        "renewable energy".to_string(),
+                        "space exploration".to_string(),
+                        "artificial intelligence".to_string(),
+                        "quantum computing".to_string(),
+                    ],
+                    labels: vec![],
+                    model: None,
+                    hf_filename: None,
+                    cache_dir: None,
+                    force_download: false,
+                    max_tokens: 8192,
+                    temperature: 0.9,
+                    top_k: Some(40),
+                    top_p: Some(0.95),
+                    ctx_size: 32768,
+                    threads: None,
+                    output_file: "instruction_dataset.jsonl".to_string(),
+                    include_metadata: true,
+                    quality_checks: true,
+                    shuffle: true,
+                    verbose: true,
+                    description: Some("Generate high-quality instruction-following dataset".to_string()),
+                    custom_fields: HashMap::new(),
+                },
+                DatasetTask {
+                    name: "Q&A Dataset".to_string(),
+                    prompt_template: "Question: {question}\nAnswer: ".to_string(),
+                    completion_template: None,
+                    dataset_type: "qa".to_string(),
+                    count: 50,
+                    variety_prompts: vec![
+                        "What is {topic} and how does it work?".to_string(),
+                        "Explain the key concepts of {topic}".to_string(),
+                        "What are the practical applications of {topic}?".to_string(),
+                    ],
+                    topics: vec![
+                        "blockchain technology".to_string(),
+                        "climate change".to_string(),
+                        "data science".to_string(),
+                    ],
+                    labels: vec![],
+                    model: None,
+                    hf_filename: None,
+                    cache_dir: None,
+                    force_download: false,
+                    max_tokens: 4096,
+                    temperature: 0.7,
+                    top_k: Some(50),
+                    top_p: Some(0.9),
+                    ctx_size: 16384,
+                    threads: None,
+                    output_file: "qa_dataset.jsonl".to_string(),
+                    include_metadata: true,
+                    quality_checks: true,
+                    shuffle: true,
+                    verbose: false,
+                    description: Some("Generate Q&A pairs for training".to_string()),
+                    custom_fields: HashMap::new(),
                 },
             ],
             environment,

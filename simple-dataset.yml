@@ -1,0 +1,47 @@
+version: "1.0"
+name: "Simple Dataset Generation Test"
+description: "Test dataset generation with small sample size"
+
+defaults:
+  model: "TheBloke/Llama-2-7B-Chat-GGUF"
+  verbose: true
+
+datasets:
+  - name: "Instruction Dataset Test"
+    prompt_template: "### Instruction:\n{instruction}\n\n### Response:\n"
+    dataset_type: "instruction"
+    count: 3  # Small test size
+    variety_prompts:
+      - "Write a brief explanation of {topic}"
+      - "Summarize the key points about {topic}"
+    topics:
+      - "artificial intelligence"
+      - "machine learning"
+    model: "TheBloke/Llama-2-7B-Chat-GGUF"
+    max_tokens: 4096  # High token limit for quality
+    temperature: 0.8
+    ctx_size: 16384  # High context size
+    output_file: "test_dataset.jsonl"
+    include_metadata: true
+    quality_checks: true
+    shuffle: true
+    verbose: true
+    description: "Generate a small test instruction dataset"
+
+  - name: "Q&A Dataset Test"
+    prompt_template: "Question: {question}\nAnswer: "
+    dataset_type: "qa"
+    count: 2
+    variety_prompts:
+      - "What are the main benefits of {topic}?"
+    topics:
+      - "renewable energy"
+    model: "TheBloke/Llama-2-7B-Chat-GGUF"
+    max_tokens: 2048
+    temperature: 0.7
+    ctx_size: 8192
+    output_file: "test_qa_dataset.jsonl"
+    include_metadata: true
+    quality_checks: true
+    verbose: true
+    description: "Generate a small Q&A dataset"

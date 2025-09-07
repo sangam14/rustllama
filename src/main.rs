@@ -41,7 +41,7 @@ mod downloader;
 mod config;
 
 use downloader::{is_hf_model_id, ModelDownloader};
-use config::{YamlConfig, InferenceTask, ModelTask};
+use config::{YamlConfig, InferenceTask, ModelTask, DatasetTask};
 
 #[derive(Parser)]
 #[command(
@@ -1039,6 +1039,78 @@ async fn handle_config_command(
         }
     }
 
+    // Execute dataset generation tasks
+    let datasets = config.datasets.clone();
+    if !datasets.is_empty() {
+        println!("{} Executing dataset generation tasks...", "Info:".blue().bold());
+        
+        let mut dataset_executed = 0;
+        let mut dataset_failed = 0;
+
+        for mut dataset in datasets {
+            // Apply default settings to dataset task
+            config.apply_dataset_defaults(&mut dataset);
+
+            // Check task filters (using dataset name)
+            if let Some(ref only_names) = only_task_names {
+                if !only_names.contains(&dataset.name) {
+                    continue;
+                }
+            }
+
+            if let Some(ref skip_names) = skip_task_names {
+                if skip_names.contains(&dataset.name) {
+                    if verbose {
+                        println!("{} Skipping dataset: {}", "Info:".blue().bold(), dataset.name);
+                    }
+                    continue;
+                }
+            }
+
+            if verbose {
+                println!("{} Generating dataset: {}", "Info:".blue().bold(), dataset.name);
+                if let Some(desc) = &dataset.description {
+                    println!("  {}", desc);
+                }
+                println!("  Type: {}, Count: {}, Output: {}", 
+                         dataset.dataset_type, dataset.count, dataset.output_file);
+            }
+
+            if dry_run {
+                println!("  {} Would generate: {} ({} samples) -> {}", 
+                         "DRY RUN:".yellow().bold(),
+                         dataset.name,
+                         dataset.count,
+                         dataset.output_file);
+                continue;
+            }
+
+            match execute_dataset_task(&dataset, verbose).await {
+                Ok(samples_generated) => {
+                    dataset_executed += 1;
+                    println!("{} Dataset '{}' completed successfully - {} samples generated", 
+                             "Success:".green().bold(), dataset.name, samples_generated);
+                }
+                Err(e) => {
+                    dataset_failed += 1;
+                    eprintln!("{} Dataset '{}' failed: {}", 
+                              "Error:".red().bold(), dataset.name, e);
+                    if !continue_on_error {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        if !dry_run && dataset_executed > 0 {
+            println!("\n{} Dataset generation complete!", "Summary:".green().bold());
+            println!("  • {} datasets generated successfully", dataset_executed);
+            if dataset_failed > 0 {
+                println!("  • {} datasets failed", dataset_failed);
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -1121,6 +1193,217 @@ async fn execute_inference_task(task: &InferenceTask, global_verbose: bool) -> R
         let _generated_text = run_inference(run_config).await?;
         Ok(())
     }
+}
+
+async fn execute_dataset_task(dataset: &DatasetTask, global_verbose: bool) -> Result<usize> {
+    use serde_json::{json, Value};
+    use rand::seq::SliceRandom;
+    use rand::thread_rng;
+    
+    let model = dataset.model.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Model is required for dataset task '{}'", dataset.name))?;
+
+    if global_verbose || dataset.verbose {
+        println!("  {} Starting dataset generation...", "Info:".blue().bold());
+        println!("    Dataset type: {}", dataset.dataset_type);
+        println!("    Target samples: {}", dataset.count);
+        println!("    Max tokens per sample: {}", dataset.max_tokens);
+        println!("    Output file: {}", dataset.output_file);
+    }
+
+    let mut generated_samples = Vec::new();
+    let mut successful_generations = 0;
+    
+    // Generate variety of prompts based on templates and topics
+    let mut prompts_to_generate = Vec::new();
+    
+    if dataset.variety_prompts.is_empty() {
+        // Use the base prompt template as-is
+        for _ in 0..dataset.count {
+            prompts_to_generate.push(dataset.prompt_template.clone());
+        }
+    } else {
+        // Generate combinations of variety prompts and topics
+        let topics = if dataset.topics.is_empty() {
+            vec!["general knowledge".to_string()]
+        } else {
+            dataset.topics.clone()
+        };
+        
+        for i in 0..dataset.count {
+            let variety_prompt = &dataset.variety_prompts[i % dataset.variety_prompts.len()];
+            let topic = &topics[i % topics.len()];
+            
+            let mut final_prompt = dataset.prompt_template.clone();
+            final_prompt = final_prompt.replace("{instruction}", variety_prompt);
+            final_prompt = final_prompt.replace("{topic}", topic);
+            final_prompt = final_prompt.replace("{question}", variety_prompt);
+            
+            prompts_to_generate.push(final_prompt);
+        }
+    }
+
+    // Shuffle prompts if requested
+    if dataset.shuffle {
+        prompts_to_generate.shuffle(&mut thread_rng());
+    }
+
+    if global_verbose || dataset.verbose {
+        println!("  {} Generated {} unique prompts", "Info:".blue().bold(), prompts_to_generate.len());
+    }
+
+    // Generate samples
+    for (i, prompt) in prompts_to_generate.iter().enumerate() {
+        if global_verbose || dataset.verbose {
+            println!("  {} Generating sample {}/{}", "Progress:".cyan(), i + 1, dataset.count);
+        }
+
+        // Create RunConfig for this generation
+        let run_config = RunConfig {
+            model: model.clone(),
+            hf_filename: dataset.hf_filename.clone(),
+            cache_dir: dataset.cache_dir.clone(),
+            force_download: dataset.force_download,
+            prompt: prompt.clone(),
+            max_tokens: dataset.max_tokens,
+            temperature: dataset.temperature,
+            top_k: dataset.top_k.unwrap_or(40),
+            top_p: dataset.top_p.unwrap_or(0.95),
+            ctx_size: Some(dataset.ctx_size),
+            threads: dataset.threads,
+            no_color: true, // Suppress colored output for batch processing
+            stats: false,   // Suppress stats for batch processing
+            verbose: false, // Suppress inference verbosity for cleaner output
+        };
+
+        match run_inference(run_config).await {
+            Ok(generated_text) => {
+                let cleaned_text = generated_text.trim();
+                
+                // Basic quality checks if enabled
+                if dataset.quality_checks {
+                    if cleaned_text.is_empty() || cleaned_text.len() < 10 {
+                        if global_verbose || dataset.verbose {
+                            println!("    {} Sample {} failed quality check (too short)", 
+                                   "Warning:".yellow().bold(), i + 1);
+                        }
+                        continue;
+                    }
+                }
+
+                // Create JSONL entry based on dataset type
+                let mut json_entry = match dataset.dataset_type.as_str() {
+                    "instruction" => {
+                        json!({
+                            "instruction": prompt.replace("### Instruction:\n", "").replace("\n\n### Response:\n", ""),
+                            "response": cleaned_text,
+                            "dataset_type": "instruction"
+                        })
+                    }
+                    "conversation" => {
+                        json!({
+                            "messages": [
+                                {"role": "user", "content": prompt},
+                                {"role": "assistant", "content": cleaned_text}
+                            ],
+                            "dataset_type": "conversation"
+                        })
+                    }
+                    "completion" => {
+                        json!({
+                            "prompt": prompt,
+                            "completion": cleaned_text,
+                            "dataset_type": "completion"
+                        })
+                    }
+                    "qa" => {
+                        json!({
+                            "question": prompt.replace("Question: ", "").replace("\nAnswer: ", ""),
+                            "answer": cleaned_text,
+                            "dataset_type": "qa"
+                        })
+                    }
+                    "classification" => {
+                        // For classification, we'd need predefined labels
+                        let label = dataset.labels.get(i % dataset.labels.len()).cloned()
+                            .unwrap_or_else(|| "unknown".to_string());
+                        json!({
+                            "text": prompt,
+                            "label": label,
+                            "generated_text": cleaned_text,
+                            "dataset_type": "classification"
+                        })
+                    }
+                    _ => {
+                        // Generic format
+                        json!({
+                            "input": prompt,
+                            "output": cleaned_text,
+                            "dataset_type": dataset.dataset_type
+                        })
+                    }
+                };
+
+                // Add metadata if requested
+                if dataset.include_metadata {
+                    if let Value::Object(ref mut map) = json_entry {
+                        map.insert("id".to_string(), json!(format!("{}_{}", dataset.name, i + 1)));
+                        map.insert("model".to_string(), json!(model));
+                        map.insert("temperature".to_string(), json!(dataset.temperature));
+                        map.insert("max_tokens".to_string(), json!(dataset.max_tokens));
+                        map.insert("generated_at".to_string(), json!(chrono::Utc::now().to_rfc3339()));
+                    }
+                }
+
+                // Add custom fields if specified
+                if !dataset.custom_fields.is_empty() {
+                    if let Value::Object(ref mut map) = json_entry {
+                        for (key, value) in &dataset.custom_fields {
+                            map.insert(key.clone(), json!(value));
+                        }
+                    }
+                }
+
+                generated_samples.push(json_entry);
+                successful_generations += 1;
+
+                if global_verbose || dataset.verbose {
+                    println!("    {} Sample {} completed", "Success:".green(), i + 1);
+                }
+            }
+            Err(e) => {
+                if global_verbose || dataset.verbose {
+                    println!("    {} Sample {} failed: {}", "Error:".red(), i + 1, e);
+                }
+                // Continue with next sample unless we want to fail fast
+            }
+        }
+
+        // Small delay to avoid overwhelming the model
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
+    // Shuffle final dataset if requested
+    if dataset.shuffle {
+        generated_samples.shuffle(&mut thread_rng());
+    }
+
+    // Write to JSONL file
+    let mut jsonl_content = String::new();
+    for sample in generated_samples {
+        jsonl_content.push_str(&serde_json::to_string(&sample)?);
+        jsonl_content.push('\n');
+    }
+
+    fs::write(&dataset.output_file, jsonl_content)?;
+
+    if global_verbose || dataset.verbose {
+        println!("  {} Dataset saved to: {}", "Success:".green().bold(), dataset.output_file);
+        println!("  {} Generated {} high-quality samples out of {} attempted", 
+                 "Summary:".blue().bold(), successful_generations, dataset.count);
+    }
+
+    Ok(successful_generations)
 }
 
 pub fn validate_args(cli: &RunConfig) -> Result<()> {
