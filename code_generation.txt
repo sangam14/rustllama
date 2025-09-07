@@ -1,0 +1,45 @@
+
+ Unterscheidung between positive and negative sentiment
+
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics import confusion_matrix
+
+def preprocess_text(text):
+    # Tokenize the text
+    tokens = word_tokenize(text)
+    
+    # Remove stop words
+    stop_words = set(stopwords.words('english'))
+    tokens = [token for token in tokens if token not in stop_words]
+    
+    # Lemmatize the tokens
+    lemmatizer = WordNetLemmatizer()
+    tokens = [lemmatizer.lemmatize(token) for token in tokens]
+    
+    # Vectorize the text
+    vectorizer = CountVectorizer()
+    X = vectorizer.fit_transform(tokens)
+    
+    # Calculate the sentiment
+    sentiment = calculate_sentiment(X)
+    return sentiment
+
+def calculate_sentiment(X):
+    # Calculate the positive and negative sentiment
+    pos_sentiment = X[X > 0].mean()
+    neg_sentiment = X[X <= 0].mean()
+    # Calculate the sentiment score
+    sentiment_score = pos_sentiment - neg_sentiment
+    return sentiment_score
+
+def calculate_confusion_matrix(sentiment_scores):
+    # Calculate the confusion matrix
+    cm = confusion_matrix(sentiment_scores, sentiment_scores)
+    return cm
+
+# Test the function
+text = "I love this restaurant. The food is amazing and the service is great

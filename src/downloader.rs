@@ -216,6 +216,11 @@ impl ModelDownloader {
 
         Ok(gguf_files)
     }
+
+    /// Get the cache directory path
+    pub fn get_cache_dir(&self) -> &PathBuf {
+        &self.cache_dir
+    }
 }
 
 /// Check if a string looks like a Hugging Face model ID

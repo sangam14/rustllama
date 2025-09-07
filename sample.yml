@@ -1,0 +1,63 @@
+version: '1.0'
+name: RustLama Configuration
+description: Example configuration for batch inference and model management
+defaults:
+  model: TheBloke/Llama-2-7B-Chat-GGUF
+  hf_filename: null
+  cache_dir: null
+  max_tokens: 1024
+  temperature: 0.8
+  top_k: 40
+  top_p: 0.95
+  ctx_size: 2048
+  threads: null
+  verbose: false
+  no_color: false
+  stats: false
+models:
+- action: pull
+  model_id: TheBloke/Llama-2-7B-Chat-GGUF
+  filename: llama-2-7b-chat.Q4_K_M.gguf
+  cache_dir: null
+  force: false
+  verbose: true
+  description: Download Llama 2 7B Chat model
+tasks:
+- name: Creative Writing
+  prompt: Write a short story about space exploration
+  model: null
+  hf_filename: null
+  cache_dir: null
+  force_download: false
+  max_tokens: 512
+  temperature: 1.0
+  top_k: 40
+  top_p: 0.9
+  ctx_size: null
+  threads: null
+  no_color: false
+  stats: true
+  verbose: false
+  output_file: creative_story.txt
+  description: Generate creative content
+  continue_on_error: false
+- name: Technical Explanation
+  prompt: Explain how neural networks work in simple terms
+  model: null
+  hf_filename: null
+  cache_dir: null
+  force_download: false
+  max_tokens: 1024
+  temperature: 0.3
+  top_k: 20
+  top_p: 0.95
+  ctx_size: null
+  threads: null
+  no_color: false
+  stats: true
+  verbose: true
+  output_file: neural_networks.txt
+  description: Generate technical documentation
+  continue_on_error: false
+environment:
+  RUSTLAMA_VERBOSE: 'true'

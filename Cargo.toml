@@ -1,6 +1,6 @@
 [package]
 name = "rustlama"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 authors = ["Sangam Biradar <sangam@example.com>"]
 description = "A fast, efficient CLI for running LLaMA model inference using llama.cpp"
@@ -17,6 +17,7 @@ colored = "2.0"
 indicatif = "0.17"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 tokio = { version = "1.0", features = ["full"] }
 reqwest = { version = "0.11", features = ["json", "stream"] }
 sha2 = "0.10"
@@ -24,3 +25,4 @@ hex = "0.4"
 futures-util = "0.3"
 url = "2.4"
 dirs = "5.0"
+tempfile = "3.8"

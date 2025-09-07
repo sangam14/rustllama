@@ -1,0 +1,53 @@
+# Advanced RustLama Workflow
+version: "1.0"
+name: "Advanced AI Workflow"
+description: "Complex multi-model workflow with error handling"
+
+# Environment variables
+environment:
+  RUSTLAMA_CACHE_DIR: "./models"
+  RUSTLAMA_VERBOSE: "true"
+
+# Default settings
+defaults:
+  max_tokens: 500
+  temperature: 0.7
+  top_k: 40
+  top_p: 0.95
+  verbose: false
+  stats: true
+
+# Model management phase
+models:
+  - action: "list"
+    verbose: true
+    description: "Check available models"
+
+# Multi-stage inference pipeline
+tasks:
+  - name: "Research Summary"
+    prompt: "Summarize the current state of large language models in 2024"
+    model: "TheBloke/Llama-2-7B-Chat-GGUF"
+    max_tokens: 800
+    temperature: 0.3
+    description: "Generate research summary"
+    continue_on_error: true
+    output_file: "research_summary.txt"
+
+  - name: "Creative Story"
+    prompt: "Write a creative story about AI helping humans explore space"
+    model: "TheBloke/Llama-2-7B-Chat-GGUF"
+    max_tokens: 1000
+    temperature: 1.0
+    description: "Creative writing task"
+    continue_on_error: true
+    output_file: "creative_story.txt"
+
+  - name: "Code Generation"
+    prompt: "Write a Python function to process text data for machine learning"
+    model: "TheBloke/Llama-2-7B-Chat-GGUF"
+    max_tokens: 400
+    temperature: 0.2
+    description: "Generate Python code"
+    continue_on_error: true
+    output_file: "code_generation.txt"

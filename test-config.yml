@@ -1,0 +1,30 @@
+# Simple RustLama Configuration
+version: "1.0"
+name: "Simple Test Configuration"
+description: "A simple test configuration for RustLama YAML support"
+
+# Default settings applied to all tasks
+defaults:
+  model: "TheBloke/Llama-2-7B-Chat-GGUF"
+  max_tokens: 100
+  temperature: 0.7
+  verbose: true
+
+# Model management - pull required models first
+models:
+  - action: "list"
+    verbose: true
+    description: "List currently cached models"
+
+# Inference tasks
+tasks:
+  - name: "Simple Greeting"
+    prompt: "Say hello and introduce yourself"
+    description: "Test basic text generation"
+    stats: true
+
+  - name: "Math Explanation"
+    prompt: "Explain what 2+2 equals"
+    max_tokens: 50
+    temperature: 0.3
+    description: "Test factual response"
